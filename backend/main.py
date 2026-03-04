@@ -4,6 +4,7 @@ import uvicorn
 from backend.routers.ingest import router as ingest_router
 from backend.routers.analyze import router as analyze_router
 from backend.routers.datasets import router as datasets_router
+from backend.integrations.whatsapp_bot import router as whatsapp_router
 from contextlib import asynccontextmanager
 import logging
 from backend.database.mongodb import mongodb_conn
@@ -61,6 +62,7 @@ app.add_middleware(
 app.include_router(ingest_router)
 app.include_router(analyze_router)
 app.include_router(datasets_router)
+app.include_router(whatsapp_router)
 
 @app.get("/")
 async def root():

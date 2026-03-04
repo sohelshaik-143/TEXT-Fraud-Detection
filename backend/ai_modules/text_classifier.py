@@ -223,46 +223,99 @@ COMMON_SCAM_PHRASES = [
     (r"\bconfidential\b.*\binformation\b", 10),
 ]
 
-# Grammar/spelling indicators (deliberate in scams)
-GRAMMAR_PATTERNS = [
-    (r"\b\w+tion\b\s+\b\w+tion\b", "Repeated nominalizations"),
-    (r"[A-Z]{4,}", "Excessive capitals (shouting)"),
-    (r"!{2,}", "Multiple exclamation marks"),
-    (r"\?\?+", "Multiple question marks"),
-    (r"\b(kindly|revert|do the needful)\b", "Formal bureaucratic language"),
-    (r"\b(recieve|occured|recieved|teh|acount|pasword|verfiy)\b", "Common scam misspellings"),
-    (r"\b(their|there|they.re)\b", "Potential there/their confusion"),
-    (r"\$\s+\d|\d\s+\$", "Incorrect currency spacing"),
-    (r",{2,}|\.{4,}", "Excessive punctuation"),
-    (r"\b(looser|loosing)\b", "Lose/loose confusion"),
+# Grammar/spelling indicators with weights
+GRAMMAR_CHECKS = [
+    # deliberate obfuscation
+    (r"[A-Z]{4,}",                           10, "Excessive capitals (shouting tactic)"),
+    (r"!{2,}",                                8,  "Multiple exclamation marks"),
+    (r"\?\?+",                                6,  "Multiple question marks"),
+    (r"\.{4,}",                               5,  "Excessive ellipsis"),
+    # Known scam misspellings
+    (r"\b(recieve|recieved|teh\b|acount|pasword|verfiy|beleive|beware|guarentee|neccesary)\b", 12, "Common scam misspelling"),
+    (r"\b(loosing|looser|its\s+me|am\s+i)\b", 8, "Lose/loose or grammar confusion"),
+    # AI/spam formal markers
+    (r"\b(kindly|revert|do\s*the\s*needful)\b", 6, "Outdated bureaucratic phrasing"),
+    (r"\b(dear\s+(sir|madam|customer|user|valued))\b", 5, "Generic impersonal salutation"),
+    # Structural spam patterns
+    (r"\$\s+\d|\d\s+\$",                      5,  "Incorrect currency spacing"),
+    (r",{2,}",                                 4,  "Double comma punctuation"),
+    (r"\s{2,}",                                3,  "Extra whitespace between words"),
+    # Very short message with red flags
 ]
 
+# Scam misspelling dictionary for typo detection
+KNOWN_TYPOS = {
+    "recieve": "receive", "recieved": "received", "teh": "the",
+    "acount": "account", "pasword": "password", "verfiy": "verify",
+    "beleive": "believe", "guarentee": "guarantee", "neccesary": "necessary",
+    "occured": "occurred", "seperately": "separately", "accomodation": "accommodation",
+    "adress": "address", "begining": "beginning", "harrased": "harassed",
+}
 
-def analyze_grammar(text: str) -> Tuple[List[str], List[str], int]:
-    """Analyze grammar and produce score, typos list and issues list."""
+
+def analyze_grammar(text: str):
+    """
+    Multi-layer grammar analysis:
+    1. Heuristic regex patterns (fast, catches scam-specific patterns)
+    2. TextBlob spell checking (catches misspellings)
+    3. Sentence structure check (run-ons, no punctuation)
+    Returns: (typos, grammar_issues, score 0-100)
+    """
     issues = []
     typos = []
     deductions = 0
 
-    for pattern, label in GRAMMAR_PATTERNS:
+    # --- Layer 1: Regex heuristics ---
+    for pattern, penalty, label in GRAMMAR_CHECKS:
         if re.search(pattern, text, re.IGNORECASE):
-            if "misspell" in label.lower():
-                typos.append(label)
-            else:
-                issues.append(label)
+            issues.append(label)
+            deductions += penalty
+
+    # --- Layer 2: Known typo dictionary ---
+    words = re.findall(r"\b[a-zA-Z]+\b", text.lower())
+    for w in words:
+        if w in KNOWN_TYPOS:
+            typos.append(f'"{w}" should be "{KNOWN_TYPOS[w]}"')
             deductions += 8
 
-    # Count sentence count vs avg words per sentence
-    sentences = re.split(r'[.!?]+', text.strip())
+    # --- Layer 3: TextBlob spell check (if available) ---
+    try:
+        from textblob import TextBlob
+        blob = TextBlob(text)
+        corrections = blob.correct()
+        corrected_words = str(corrections).split()
+        original_words = text.split()
+        changed = 0
+        for orig, corr in zip(original_words[:30], corrected_words[:30]):
+            if orig.lower() != corr.lower() and orig.isalpha() and corr.isalpha():
+                if orig.lower() not in KNOWN_TYPOS:  # avoid double-counting
+                    typos.append(f'Possible misspelling: "{orig}"')
+                    changed += 1
+        deductions += changed * 6
+    except Exception:
+        pass  # textblob not available, skip
+
+    # --- Layer 4: Sentence structure ---
+    text_stripped = text.strip()
+    sentences = re.split(r'[.!?]+', text_stripped)
     sentences = [s.strip() for s in sentences if s.strip()]
+
     if sentences:
         avg_words = sum(len(s.split()) for s in sentences) / len(sentences)
-        if avg_words > 30:
-            issues.append("Unusually long run-on sentences")
-            deductions += 5
+        if avg_words > 35:
+            issues.append("Run-on sentences (avg >35 words)")
+            deductions += 8
+        if len(text_stripped) > 50 and not re.search(r'[.!?]', text_stripped):
+            issues.append("No sentence-ending punctuation in long message")
+            deductions += 6
+
+    # No punctuation at all
+    if len(text) > 30 and not re.search(r'[,;.!?]', text):
+        issues.append("Missing punctuation throughout")
+        deductions += 5
 
     score = max(0, 100 - deductions)
-    return typos, issues, score
+    return typos[:5], issues[:5], score
 
 
 def detect_author(text: str, signals: dict) -> str:
