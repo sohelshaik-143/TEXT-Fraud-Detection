@@ -4,7 +4,6 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { ShieldCheck } from 'lucide-react';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
-import { LanguageToggle } from '@/components/ui/LanguageToggle';
 import { cn } from '@/lib/utils';
 
 export function Navbar() {
@@ -45,8 +44,6 @@ export function Navbar() {
 
                 {/* Global Controls */}
                 <div className="flex items-center gap-3">
-                    <LanguageToggle />
-                    <div className="w-px h-6 bg-border mx-1"></div>
                     <ThemeToggle />
                 </div>
             </div>
