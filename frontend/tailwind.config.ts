@@ -13,19 +13,30 @@ const config: Config = {
                 background: "var(--background)",
                 foreground: "var(--foreground)",
                 border: "var(--border)",
-
+                primary: {
+                    DEFAULT: "hsl(var(--primary))",
+                    foreground: "hsl(var(--primary-foreground))",
+                },
+                accent: {
+                    DEFAULT: "hsl(var(--accent))",
+                    foreground: "hsl(var(--accent-foreground))",
+                },
+                muted: {
+                    DEFAULT: "hsl(var(--muted))",
+                    foreground: "hsl(var(--muted-foreground))",
+                },
                 // Semantic Colors for Risk Levels
                 safe: {
                     DEFAULT: "var(--safe)",
-                    foreground: "var(--safe-foreground)",
                 },
                 warning: {
                     DEFAULT: "var(--warning)",
-                    foreground: "var(--warning-foreground)",
                 },
                 danger: {
                     DEFAULT: "var(--danger)",
-                    foreground: "var(--danger-foreground)",
+                },
+                critical: {
+                    DEFAULT: "var(--critical)",
                 },
             },
             fontFamily: {
