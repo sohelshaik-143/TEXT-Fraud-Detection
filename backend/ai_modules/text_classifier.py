@@ -63,6 +63,42 @@ class TextClassifier:
     UPI_TERMS = {
         "upi", "paytm", "phonepe", "gpay", "google pay", "bhim", "collect request"
     }
+
+    # Romanised transliterations of regional language fraud phrases
+    # Covers Hindi, Telugu, Tamil, Marathi, Bengali, and Kannada
+    REGIONAL_FRAUD_TERMS = {
+        # Hindi (Romanised)
+        "aapka account band", "abhi verify karo", "inaam jeeta hai",
+        "lottery jeeti hai", "turant karo", "yeh offer sirf aaj",
+        "otp share karo", "otp bhejo", "bank details do", "bank details bhejo",
+        "paisa double", "aadhar link karo", "sim band hoga",
+        "ek baar call karo", "khata band", "account band ho jayega",
+        "ek baar otp", "registration fee bharo", "jaldi karo",
+        "rupaye jeete hain", "crore jeete hain", "prize claim karo",
+        # Telugu (Romanised)
+        "meeru winner", "otp cheppandi", "account suspend avutundi",
+        "nundi paniki ravali", "job vastundi", "registration fee kattu",
+        "oka roju lo", "bank details ivvandi", "sim cancel avutundi",
+        "inaam vastundi", "otp ivvandi", "mee account block",
+        # Tamil (Romanised)
+        "ungal account", "otp sollunga", "inaam kidaikkum",
+        "velai varugiradhu", "registration kattanam",
+        "bank details kudunga", "turant pannunga", "sim niruthapaddum",
+        "otp share pannunga", "kadaisi vaaippu",
+        # Marathi (Romanised)
+        "tumcha account", "otp sanga", "lagech kara",
+        "bank khate", "registration shulk", "sim band honar",
+        "inaam milale", "otp patha", "bank mahiti dya",
+        # Bengali (Romanised)
+        "apnar account", "otp share korun", "prize paben",
+        "tara tari korun", "bank details din", "sim band hobe",
+        "otp pathiye din", "registration fee dio", "inaam jitechen",
+        # Kannada (Romanised)
+        "nimma account", "otp heli", "inaam siguttade",
+        "registration shulka", "koodane maadi", "sim close aaguttade",
+        "otp share madi", "bank details kodi", "khata block aaguttade",
+    }
+
     TECH_SUPPORT_TERMS = {
         "tech support", "refund", "remote access", "anydesk", "teamviewer",
         "system infected", "windows license"
@@ -214,6 +250,7 @@ class TextClassifier:
             "tech_support_refund": False,
             "romance_fraud": False,
             "money_transfer_request": False,
+            "regional_language_fraud": False,
         }
 
         score_breakdown = {
@@ -229,6 +266,7 @@ class TextClassifier:
             "spam_marketing": 0,
             "regional_upi_fraud": 0,
             "tech_support_refund": 0,
+            "regional_language_fraud": 0,
             "ai_generated_tone": 0,
             "spelling_grammar_issues": 0,
             "romance_fraud": 0,
@@ -315,6 +353,15 @@ class TextClassifier:
             signals["money_transfer_request"] = True
             score_breakdown["money_transfer_request"] = min(32, 16 + money_transfer_hits * 5)
             reasons.append("Contains explicit requests for money transfer or banking information.")
+
+        regional_hits = self._count_matches(text_lower, self.REGIONAL_FRAUD_TERMS)
+        if regional_hits:
+            signals["regional_language_fraud"] = True
+            score_breakdown["regional_language_fraud"] = min(32, 14 + regional_hits * 6)
+            reasons.append(
+                "Contains regional-language fraud trigger phrases "
+                "(Hindi/Telugu/Tamil/Marathi/Bengali/Kannada)."
+            )
 
         ai_tone_flag = self._detect_ai_tone(text)
         if ai_tone_flag:
@@ -465,6 +512,14 @@ class TextClassifier:
         if signals["tech_support_refund"]:
             return "Tech Support Scam"
         
+        # Regional Language Scams (Priority logic)
+        if signals["regional_language_fraud"]:
+            if signals["credential_theft"]:
+                return "Regional Language Phishing"
+            if signals["financial_lure"]:
+                return "Regional Language Scam"
+            return "Suspicious Regional Message"
+
         # Job scams
         if signals["job_scam"]:
             if signals["financial_lure"]:
@@ -477,7 +532,7 @@ class TextClassifier:
                 return "Crypto Investment Scam"
             if signals["social_engineering"] or signals["urgency"]:
                 return "Crypto/Investment Promotion"
-            return "General Message"
+            return "Crypto Investment Pitch"
         
         # Phishing - combination of impersonation + credential theft
         if signals["credential_theft"] and signals["impersonation"]:
@@ -551,6 +606,8 @@ class TextClassifier:
             fraud_types.append("Romance Scam")
         if signals["money_transfer_request"]:
             fraud_types.append("Money Transfer Fraud")
+        if signals["regional_language_fraud"]:
+            fraud_types.append("Regional Language Fraud")
 
         if not fraud_types:
             if risk_level == RiskLevel.LOW:
@@ -576,6 +633,11 @@ class TextClassifier:
             actions.append("Be cautious of false romantic relationships seeking personal/financial information.")
         if signals["money_transfer_request"]:
             actions.append("Never send money or share banking details to unknown contacts.")
+        if signals["regional_language_fraud"]:
+            actions.append(
+                "Be extra cautious with regional-language messages requesting OTP, "
+                "bank details, or registration fees — these are a common fraud vector."
+            )
 
         if not actions:
             if "Communication" in text_category or text_category == "General Message":
